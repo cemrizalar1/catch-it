@@ -259,6 +259,25 @@
   let elapsedFrames = 0;
   let keys = { left: false, right: false };
 
+  // Audience: the 4 unselected characters watch from the top of the screen and
+  // clap every 50-point milestone so the player has a visible sense of progress.
+  let lastMilestone = 0;
+  let celebrationTimer = 0;
+  let claps = [];
+
+  function otherCharacters() {
+    return CHARACTERS.filter(function(c) { return c.id !== selectedCharId; });
+  }
+
+  function triggerMilestone() {
+    celebrationTimer = 75;
+    playMilestoneSound();
+    const others = otherCharacters();
+    others.forEach(function(c, i) {
+      claps.push({ x: W * (i + 1) / 5, y: 40, vy: -0.5, life: 55 });
+    });
+  }
+
   const stars = Array.from({ length: 60 }, function() {
     return {
       x: Math.random() * W,
@@ -332,6 +351,13 @@
     playTone(523, 0.12, 'sine', 0, 0.2);
     playTone(659, 0.12, 'sine', 0.06, 0.19);
     playTone(784, 0.18, 'sine', 0.12, 0.2);
+  }
+
+  function playMilestoneSound() {
+    playTone(523, 0.12, 'sine', 0, 0.22);
+    playTone(659, 0.12, 'sine', 0.09, 0.2);
+    playTone(784, 0.12, 'sine', 0.18, 0.2);
+    playTone(1046, 0.24, 'sine', 0.27, 0.22);
   }
 
   // ---- Character background music (real tracks, one per character, looped) ----
@@ -431,6 +457,9 @@
     spawnInterval = 85;
     elapsedFrames = 0;
     catcher.x = W / 2;
+    lastMilestone = 0;
+    celebrationTimer = 0;
+    claps = [];
     canvas.style.transform = 'rotate(0deg)';
     canvas.style.filter = 'blur(0px) hue-rotate(0deg)';
     updateHud();
@@ -443,7 +472,7 @@
 
   function spawnItem() {
     const r = 18 + Math.random() * 6;
-    const difficulty = Math.min(score, 55); // ramps with points scored, caps out so it stays playable
+    const difficulty = Math.min(score, 260); // ramps with points scored; extended cap so speed keeps climbing across many 50-pt milestones instead of plateauing early
     const speed = 0.9 + Math.random() * 0.5 + difficulty * 0.045;
     const base = {
       x: r + Math.random() * (W - 2 * r),
@@ -512,7 +541,11 @@
     catcher.x = Math.max(catcher.r, Math.min(W - catcher.r, catcher.x));
 
     spawnTimer++;
-    const currentInterval = Math.max(38, spawnInterval - score * 1.4);
+    // Every 50-point milestone tightens the minimum spawn gap further, so pace keeps
+    // escalating in steps instead of settling at a single floor forever.
+    const milestoneLevel = Math.floor(score / 50);
+    const paceFloor = Math.max(14, 38 - milestoneLevel * 6);
+    const currentInterval = Math.max(paceFloor, spawnInterval - score * 1.4);
     if (spawnTimer >= currentInterval) {
       spawnTimer = 0;
       spawnItem();
@@ -534,6 +567,11 @@
         } else {
           score++;
           playCatchSound();
+          const milestone = Math.floor(score / 50);
+          if (milestone > lastMilestone && milestone > 0) {
+            lastMilestone = milestone;
+            triggerMilestone();
+          }
         }
         items.splice(i, 1);
         updateHud();
@@ -550,18 +588,71 @@
         }
       }
     }
+
+    if (celebrationTimer > 0) celebrationTimer--;
+    for (let j = claps.length - 1; j >= 0; j--) {
+      const p = claps[j];
+      p.y += p.vy;
+      p.life--;
+      if (p.life <= 0) claps.splice(j, 1);
+    }
   }
 
   function drawBgLogo() {
     // Faint, blurred band-logo watermark behind everything else — decorative only,
     // kept low-alpha and blurred so it never competes with the actual gameplay.
+    // (Previous alpha/blur combo was so faint against the light theme it was
+    // effectively invisible — bumped up so it actually reads as a watermark.)
     if (!bgLogoImage.complete || bgLogoImage.naturalWidth === 0) return;
     ctx.save();
-    ctx.globalAlpha = 0.07;
-    ctx.filter = 'blur(10px)';
-    const size = 260;
+    ctx.globalAlpha = 0.32;
+    ctx.filter = 'blur(5px)';
+    const size = 340;
     ctx.drawImage(bgLogoImage, W / 2 - size / 2, H / 2 - size / 2, size, size);
     ctx.restore();
+  }
+
+  function drawAudience() {
+    // The 4 unselected characters watch from the top of the screen; they bob gently
+    // and "clap" (bounce faster) for a moment right after a 50-point milestone.
+    const others = otherCharacters();
+    const clapping = celebrationTimer > 0;
+    const r = 15;
+    others.forEach(function(c, i) {
+      const img = avatarImages[c.id];
+      const x = W * (i + 1) / 5;
+      const idleBob = Math.sin(elapsedFrames * 0.05 + i) * 2;
+      const clapBob = clapping ? Math.abs(Math.sin(elapsedFrames * 0.6 + i)) * 5 : 0;
+      const y = 26 + idleBob - clapBob;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, x - r, y - r, r * 2, r * 2);
+      } else {
+        ctx.fillStyle = '#c8d6ff';
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = c.ring;
+      ctx.stroke();
+    });
+  }
+
+  function drawClaps() {
+    claps.forEach(function(p) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life / 55);
+      ctx.font = '18px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('👏', p.x, p.y);
+      ctx.restore();
+    });
   }
 
   function draw() {
@@ -570,6 +661,8 @@
     drawStars();
     items.forEach(drawShape);
     drawCatcher();
+    drawAudience();
+    drawClaps();
     applyDizzy();
   }
 
