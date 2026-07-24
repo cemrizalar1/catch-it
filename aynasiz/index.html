@@ -281,6 +281,7 @@
   function toggleMute() {
     muted = !muted;
     if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+    if (currentMusicAudio) currentMusicAudio.muted = muted;
     var btn = document.getElementById('muteBtn');
     if (btn) btn.textContent = muted ? '🔇' : '🔊';
   }
@@ -313,157 +314,35 @@
     playTone(110, 0.4, 'sawtooth', 0.28, 0.14);
   }
 
-  // ---- Character background music (procedural, genre-styled loops) ----
-  let musicGainNode = null;
-  let musicStep = 0;
-  let musicTimeoutId = null;
-  let activeMusicChar = null;
-  let distortionCurve = null;
-
-  function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-
-  function getMusicGain() {
-    if (!musicGainNode) {
-      var ac = getAudioCtx();
-      musicGainNode = ac.createGain();
-      musicGainNode.gain.value = 0.5;
-      musicGainNode.connect(getMasterGain());
-    }
-    return musicGainNode;
-  }
-
-  function getDistortionCurve() {
-    if (!distortionCurve) {
-      var n = 44100, amount = 26;
-      var curve = new Float32Array(n);
-      for (var i = 0; i < n; i++) {
-        var x = (i * 2) / n - 1;
-        curve[i] = ((3 + amount) * x * 20 * Math.PI / 180) / (Math.PI + amount * Math.abs(x));
-      }
-      distortionCurve = curve;
-    }
-    return distortionCurve;
-  }
-
-  function makeVoice(waveform, distort, vel, sustainFactor, vibrato) {
-    return { waveform: waveform, distort: !!distort, vel: vel, sustainFactor: sustainFactor || 0.8, vibrato: !!vibrato };
-  }
-
-  function playMusicNote(midi, dur, voice) {
-    var ac = getAudioCtx();
-    var mg = getMusicGain();
-    var freq = midiToFreq(midi);
-    var osc = ac.createOscillator();
-    osc.type = voice.waveform;
-    osc.frequency.value = freq;
-    var g = ac.createGain();
-    var t0 = ac.currentTime;
-    var sustain = Math.max(0.05, dur * voice.sustainFactor);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(voice.vel, t0 + Math.min(0.03, sustain * 0.25));
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + sustain);
-    var outNode = osc;
-    if (voice.distort) {
-      var shaper = ac.createWaveShaper();
-      shaper.curve = getDistortionCurve();
-      shaper.oversample = '2x';
-      osc.connect(shaper);
-      outNode = shaper;
-    }
-    outNode.connect(g);
-    g.connect(mg);
-    if (voice.vibrato) {
-      var lfo = ac.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.value = 5.3;
-      var lfoGain = ac.createGain();
-      lfoGain.gain.value = 4;
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc.frequency);
-      lfo.start(t0);
-      lfo.stop(t0 + sustain + 0.1);
-    }
-    osc.start(t0);
-    osc.stop(t0 + sustain + 0.1);
-  }
-
-  // MIDI note refs: E2=40 G2=43 A2=45 B2=47 C3=48 D3=50 E3=52 G3=55 A3=57
-  // B3=59 C4=60 D4=62 E4=64 F#4=66 G4=67 A4=69 B4=71 C5=72 D5=74
-  const MUSIC = {
-    // Onat — hard rock / groove metal (Pantera-ish palm-muted riff, distorted)
-    mad: {
-      bpm: 132,
-      stepBeats: 0.5,
-      bass: { voice: makeVoice('sawtooth', true, 0.15, 0.55),
-        pattern: [[40,47],[40,47],null,[40,47],[43,50],null,[45,52],null] },
-      lead: { voice: makeVoice('square', true, 0.08, 0.4),
-        pattern: [null,null,null,null,null,null,[64],null] }
-    },
-    // Ozi — fast rock 'n' roll (GNR-style driving eighths)
-    bassist_black: {
-      bpm: 168,
-      stepBeats: 0.5,
-      bass: { voice: makeVoice('sawtooth', false, 0.14, 0.7),
-        pattern: [[45],[45],[48],[45],[50],[45],[52],[50]] },
-      lead: { voice: makeVoice('square', false, 0.07, 0.55),
-        pattern: [null,[64],null,[67],null,[69],null,[67]] }
-    },
-    // Batin — Japanese soul / city pop classic, laid-back major7 pads
-    guitarist_green: {
-      bpm: 92,
-      stepBeats: 0.5,
-      bass: { voice: makeVoice('sine', false, 0.13, 0.9),
-        pattern: [[43],null,[47],null,[50],null,[47],null] },
-      lead: { voice: makeVoice('triangle', false, 0.09, 1.3),
-        pattern: [null,[62,66,69],null,null,[64,67,71],null,null,null] }
-    },
-    // Emre — bass-heavy funk (Vulfpeck-style syncopated 16ths)
-    bassist_yellow: {
-      bpm: 104,
-      stepBeats: 0.25,
-      bass: { voice: makeVoice('square', false, 0.2, 0.3),
-        pattern: [[40],null,[40],[43],null,[40],null,[45],[40],null,[40],[43],null,null,[40],null] },
-      lead: { voice: makeVoice('sine', false, 0.06, 0.35),
-        pattern: [null,null,null,null,null,null,null,[64],null,null,null,null,null,null,null,[67]] }
-    },
-    // Cem — smooth sax-ballad (Careless Whisper vibe, legato + vibrato)
-    sax_teal: {
-      bpm: 88,
-      stepBeats: 0.5,
-      bass: { voice: makeVoice('sine', false, 0.09, 1.4),
-        pattern: [[45],null,null,null,[43],null,null,null] },
-      lead: { voice: makeVoice('sine', true, 0.13, 1.7, true),
-        pattern: [null,null,[69],[71],[72],null,[71],[69]] }
-    }
+  // ---- Character background music (real tracks, one per character, looped) ----
+  // Files live alongside index.html in a music/ folder.
+  const MUSIC_FILES = {
+    mad: 'music/onat.mp3',            // Onat
+    bassist_black: 'music/ozi.mp3',   // Ozi
+    guitarist_green: 'music/batin.mp3', // Batin
+    bassist_yellow: 'music/emre.mp3', // Emre
+    sax_teal: 'music/cem.mp3'         // Cem
   };
-
-  function scheduleMusicStep() {
-    if (!running || !activeMusicChar) return;
-    var pat = MUSIC[activeMusicChar];
-    if (!pat) return;
-    var beatSec = 60 / pat.bpm;
-    var stepSec = beatSec * pat.stepBeats;
-    var bassLen = pat.bass.pattern.length;
-    var bassNotes = pat.bass.pattern[musicStep % bassLen];
-    if (bassNotes) bassNotes.forEach(function(m) { playMusicNote(m, stepSec, pat.bass.voice); });
-    var leadLen = pat.lead.pattern.length;
-    var leadNotes = pat.lead.pattern[musicStep % leadLen];
-    if (leadNotes) leadNotes.forEach(function(m) { playMusicNote(m, stepSec, pat.lead.voice); });
-    musicStep++;
-    musicTimeoutId = setTimeout(scheduleMusicStep, stepSec * 1000);
-  }
+  let currentMusicAudio = null;
 
   function startMusic(charId) {
     stopMusic();
-    if (!MUSIC[charId]) return;
-    activeMusicChar = charId;
-    musicStep = 0;
-    scheduleMusicStep();
+    var file = MUSIC_FILES[charId];
+    if (!file) return;
+    var audioEl = new Audio(file);
+    audioEl.loop = true;
+    audioEl.volume = 0.55;
+    audioEl.muted = muted;
+    audioEl.play().catch(function() { /* ignored: browser may block until a user gesture, startGame() is one */ });
+    currentMusicAudio = audioEl;
   }
 
   function stopMusic() {
-    if (musicTimeoutId) { clearTimeout(musicTimeoutId); musicTimeoutId = null; }
-    activeMusicChar = null;
+    if (currentMusicAudio) {
+      currentMusicAudio.pause();
+      currentMusicAudio.currentTime = 0;
+      currentMusicAudio = null;
+    }
   }
 
   function charById(id) {
