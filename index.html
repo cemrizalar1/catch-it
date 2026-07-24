@@ -605,9 +605,9 @@
     // effectively invisible — bumped up so it actually reads as a watermark.)
     if (!bgLogoImage.complete || bgLogoImage.naturalWidth === 0) return;
     ctx.save();
-    ctx.globalAlpha = 0.32;
-    ctx.filter = 'blur(5px)';
-    const size = 340;
+    ctx.globalAlpha = 0.14;
+    ctx.filter = 'blur(6px)';
+    const size = 300;
     ctx.drawImage(bgLogoImage, W / 2 - size / 2, H / 2 - size / 2, size, size);
     ctx.restore();
   }
@@ -623,7 +623,7 @@
       const x = W * (i + 1) / 5;
       const idleBob = Math.sin(elapsedFrames * 0.05 + i) * 2;
       const clapBob = clapping ? Math.abs(Math.sin(elapsedFrames * 0.6 + i)) * 5 : 0;
-      const y = 26 + idleBob - clapBob;
+      const y = 68 + idleBob - clapBob;
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
