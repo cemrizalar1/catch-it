@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catch It</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: linear-gradient(180deg, #1e2a4a 0%, #0f1626 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #wrap {
+    position: relative;
+  }
+  canvas {
+    display: block;
+    background: #10182c;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    touch-action: none;
+    cursor: none;
+  }
+  #hud {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    color: #f4f6fb;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,14,28,0.72);
+    border-radius: 12px;
+    color: #f4f6fb;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  #overlay h1 {
+    font-size: 34px;
+    margin: 0 0 6px;
+  }
+  #overlay p {
+    font-size: 15px;
+    opacity: 0.75;
+    margin: 4px 0 18px;
+    max-width: 320px;
+  }
+  #overlay .score-line {
+    font-size: 17px;
+    margin-bottom: 18px;
+    opacity: 0.9;
+  }
+  button {
+    background: #ff5d73;
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(255,93,115,0.4);
+    transition: transform 0.15s ease;
+  }
+  button:hover { transform: translateY(-2px); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="420" height="620"></canvas>
+  <div id="hud">
+    <span id="scoreLabel">Score: 0</span>
+    <span id="livesLabel">Lives: ❤️❤️❤️</span>
+  </div>
+  <div id="overlay">
+    <h1>Catch It</h1>
+    <p>Move the basket with your mouse, finger, or arrow keys. Catch the falling shapes, don't miss too many.</p>
+    <button id="startBtn">Start Game</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const scoreLabel = document.getElementById('scoreLabel');
+  const livesLabel = document.getElementById('livesLabel');
+
+  const basket = { w: 70, h: 18, x: W / 2 - 35, y: H - 40, speed: 8 };
+  let items = [];
+  let score = 0;
+  let lives = 3;
+  let running = false;
+  let spawnTimer = 0;
+  let spawnInterval = 70; // frames
+  let elapsedFrames = 0;
+  let keys = { left: false, right: false };
+
+  const colors = ['#ff5d73', '#ffb84c', '#4cd6b4', '#5b8dff', '#c084fc'];
+  const shapeTypes = ['circle', 'square', 'triangle'];
+
+  function resetGame() {
+    items = [];
+    score = 0;
+    lives = 3;
+    spawnTimer = 0;
+    spawnInterval = 70;
+    elapsedFrames = 0;
+    basket.x = W / 2 - basket.w / 2;
+    updateHud();
+  }
+
+  function updateHud() {
+    scoreLabel.textContent = 'Score: ' + score;
+    livesLabel.textContent = 'Lives: ' + '❤️'.repeat(Math.max(lives, 0));
+  }
+
+  function spawnItem() {
+    const r = 14 + Math.random() * 8;
+    items.push({
+      x: r + Math.random() * (W - 2 * r),
+      y: -r,
+      r: r,
+      speed: 2.2 + Math.random() * 1.6 + elapsedFrames / 1800,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      shape: shapeTypes[Math.floor(Math.random() * shapeTypes.length)]
+    });
+  }
+
+  function drawBasket() {
+    ctx.fillStyle = '#f4f6fb';
+    ctx.strokeStyle = '#c9ceda';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(basket.x, basket.y);
+    ctx.lineTo(basket.x + basket.w, basket.y);
+    ctx.lineTo(basket.x + basket.w - 8, basket.y + basket.h);
+    ctx.lineTo(basket.x + 8, basket.y + basket.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function drawShape(item) {
+    ctx.fillStyle = item.color;
+    ctx.beginPath();
+    if (item.shape === 'circle') {
+      ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
+    } else if (item.shape === 'square') {
+      ctx.rect(item.x - item.r, item.y - item.r, item.r * 2, item.r * 2);
+    } else {
+      ctx.moveTo(item.x, item.y - item.r);
+      ctx.lineTo(item.x + item.r, item.y + item.r);
+      ctx.lineTo(item.x - item.r, item.y + item.r);
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+
+  function update() {
+    elapsedFrames++;
+
+    if (keys.left) basket.x -= basket.speed;
+    if (keys.right) basket.x += basket.speed;
+    basket.x = Math.max(0, Math.min(W - basket.w, basket.x));
+
+    spawnTimer++;
+    const currentInterval = Math.max(28, spawnInterval - elapsedFrames / 20);
+    if (spawnTimer >= currentInterval) {
+      spawnTimer = 0;
+      spawnItem();
+    }
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.y += it.speed;
+
+      const caught =
+        it.y + it.r >= basket.y &&
+        it.y - it.r <= basket.y + basket.h &&
+        it.x >= basket.x - it.r * 0.3 &&
+        it.x <= basket.x + basket.w + it.r * 0.3;
+
+      if (caught) {
+        score++;
+        items.splice(i, 1);
+        updateHud();
+      } else if (it.y - it.r > H) {
+        lives--;
+        items.splice(i, 1);
+        updateHud();
+        if (lives <= 0) {
+          endGame();
+          return;
+        }
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // subtle grid backdrop
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    for (let gx = 0; gx < W; gx += 30) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, H);
+      ctx.stroke();
+    }
+    items.forEach(drawShape);
+    drawBasket();
+  }
+
+  function loop() {
+    if (!running) return;
+    update();
+    if (!running) return;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function startGame() {
+    resetGame();
+    overlay.classList.add('hidden');
+    running = true;
+    requestAnimationFrame(loop);
+  }
+
+  function endGame() {
+    running = false;
+    overlay.classList.remove('hidden');
+    overlay.innerHTML =
+      '<h1>Game Over</h1>' +
+      '<p class="score-line">Final score: ' + score + '</p>' +
+      '<button id="restartBtn">Play Again</button>';
+    document.getElementById('restartBtn').addEventListener('click', startGame);
+  }
+
+  startBtn.addEventListener('click', startGame);
+
+  // Mouse control
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const mx = (e.clientX - rect.left) * scaleX;
+    basket.x = Math.max(0, Math.min(W - basket.w, mx - basket.w / 2));
+  });
+
+  // Touch control
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const tx = (e.touches[0].clientX - rect.left) * scaleX;
+    basket.x = Math.max(0, Math.min(W - basket.w, tx - basket.w / 2));
+  }, { passive: false });
+
+  // Keyboard control
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') keys.left = true;
+    if (e.key === 'ArrowRight') keys.right = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') keys.left = false;
+    if (e.key === 'ArrowRight') keys.right = false;
+  });
+
+  updateHud();
+})();
+</script>
+</body>
+</html>
