@@ -121,8 +121,7 @@
   let elapsedFrames = 0;
   let keys = { left: false, right: false };
 
-  const colors = ['#ff5d73', '#ffb84c', '#4cd6b4', '#5b8dff', '#c084fc'];
-  const shapeTypes = ['circle', 'square', 'triangle'];
+  const animals = ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🐸', '🐵'];
 
   function resetGame() {
     items = [];
@@ -141,14 +140,13 @@
   }
 
   function spawnItem() {
-    const r = 14 + Math.random() * 8;
+    const r = 16 + Math.random() * 8;
     items.push({
       x: r + Math.random() * (W - 2 * r),
       y: -r,
       r: r,
-      speed: 2.2 + Math.random() * 1.6 + elapsedFrames / 1800,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      shape: shapeTypes[Math.floor(Math.random() * shapeTypes.length)]
+      speed: 1.2 + Math.random() * 0.9 + elapsedFrames / 3600,
+      emoji: animals[Math.floor(Math.random() * animals.length)]
     });
   }
 
@@ -167,19 +165,10 @@
   }
 
   function drawShape(item) {
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    if (item.shape === 'circle') {
-      ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
-    } else if (item.shape === 'square') {
-      ctx.rect(item.x - item.r, item.y - item.r, item.r * 2, item.r * 2);
-    } else {
-      ctx.moveTo(item.x, item.y - item.r);
-      ctx.lineTo(item.x + item.r, item.y + item.r);
-      ctx.lineTo(item.x - item.r, item.y + item.r);
-      ctx.closePath();
-    }
-    ctx.fill();
+    ctx.font = (item.r * 2) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.emoji, item.x, item.y);
   }
 
   function update() {
@@ -190,7 +179,7 @@
     basket.x = Math.max(0, Math.min(W - basket.w, basket.x));
 
     spawnTimer++;
-    const currentInterval = Math.max(28, spawnInterval - elapsedFrames / 20);
+    const currentInterval = Math.max(40, spawnInterval - elapsedFrames / 30);
     if (spawnTimer >= currentInterval) {
       spawnTimer = 0;
       spawnItem();
