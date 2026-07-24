@@ -9,7 +9,7 @@
     margin: 0;
     padding: 0;
     height: 100%;
-    background: linear-gradient(180deg, #0b0620 0%, #030108 100%);
+    background: linear-gradient(180deg, #eef1fb 0%, #dfe6fa 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -21,9 +21,9 @@
   }
   canvas {
     display: block;
-    background: #05020f;
+    background: #f6f8ff;
     border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    box-shadow: 0 20px 60px rgba(123,92,255,0.18);
     touch-action: none;
     cursor: none;
   }
@@ -34,11 +34,10 @@
     right: 20px;
     display: flex;
     justify-content: space-between;
-    color: #f4f6fb;
+    color: #241d4f;
     font-size: 20px;
     font-weight: 700;
     letter-spacing: 0.5px;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.4);
     pointer-events: none;
   }
   #overlay {
@@ -48,9 +47,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(5,2,15,0.78);
+    background: rgba(255,255,255,0.85);
     border-radius: 12px;
-    color: #f4f6fb;
+    color: #241d4f;
     text-align: center;
     padding: 24px;
     box-sizing: border-box;
@@ -158,8 +157,8 @@
   }
 
   function drawBasket() {
-    ctx.fillStyle = '#c8d6ff';
-    ctx.strokeStyle = '#7b5cff';
+    ctx.fillStyle = '#7b5cff';
+    ctx.strokeStyle = '#4b2fd1';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(basket.x, basket.y);
@@ -180,9 +179,9 @@
 
   function drawStars() {
     stars.forEach((s) => {
-      ctx.fillStyle = 'rgba(255,255,255,' + s.a + ')';
+      ctx.fillStyle = 'rgba(123,92,255,' + s.a * 0.5 + ')';
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, s.r * 1.6, 0, Math.PI * 2);
       ctx.fill();
     });
   }
